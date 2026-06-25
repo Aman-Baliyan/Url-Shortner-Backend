@@ -1,0 +1,51 @@
+server:
+  port: 8080
+
+eureka:
+  client:
+    serviceUrl:
+#      defaultZone: ${EUREKA_SERVER:http://localhost:8761/eureka}
+      defaultZone: http://localhost:8761/eureka
+
+spring:
+  application:
+    name: gateway
+
+  # Connect to Reactive Redis instance
+  data:
+    redis:
+      host: localhost
+      port: 16379
+      password: mypass
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: true
+              lower-case-service-id: true
+
+          routes:
+            # ROUTE 1: URL Generation (Rate Limited)
+            - id: url-service-generate
+              uri: lb://URL-SERVICE
+              predicates:
+                - Path=/generate
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@redisRateLimiter}"
+                    key-resolver: "#{@simpleClientAddressResolver}"
+
+            # ROUTE 2: Redirection (No Rate Limiting applied)
+            - id: url-service-redirect
+              uri: lb://URL-SERVICE
+              predicates:
+                - Path=/getUrl/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@redisRateLimiter}"
+                    key-resolver: "#{@simpleClientAddressResolver}"
