@@ -20,6 +20,11 @@ services:
           - node.role == manager
       restart_policy:
         condition: on-failure
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
 
   # ─────────────────────────────────────────────
   # Eureka Discovery Registry
@@ -40,6 +45,11 @@ services:
       update_config:
         parallelism: 1
         delay: 10s
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     networks:
       - app-net
 
@@ -68,6 +78,11 @@ services:
       update_config:
         parallelism: 1
         delay: 10s
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     networks:
       - app-net
 
@@ -95,6 +110,11 @@ services:
       update_config:
         parallelism: 1
         delay: 10s
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     networks:
       - app-net
 
@@ -133,6 +153,11 @@ services:
       update_config:
         parallelism: 1
         delay: 10s
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     networks:
       - app-net
 
@@ -171,6 +196,11 @@ services:
       update_config:
         parallelism: 1
         delay: 10s
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     networks:
       - app-net
 
@@ -191,16 +221,20 @@ services:
       MYSQL_PASSWORD: ${SPRING_DATA_PASS_ONE}
     volumes:
       - mysql-shard-1-data:/var/lib/mysql
-      - ./init-url-db.sql:/docker-entrypoint-initdb.d/init-url-db.sql
+    configs:
+      - source: shard_init_script
+        target: /docker-entrypoint-initdb.d/init-url-db.sql
     deploy:
       replicas: 1
-#      placement:
-#        constraints:
-#          - node.role == manager
       restart_policy:
         condition: on-failure
         delay: 10s
         max_attempts: 3
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
     networks:
       - app-net
 
@@ -221,16 +255,20 @@ services:
       MYSQL_PASSWORD: ${SPRING_DATA_PASS_TWO}
     volumes:
       - mysql-shard-2-data:/var/lib/mysql
-      - ./init-url-db.sql:/docker-entrypoint-initdb.d/init-url-db.sql
+    configs:
+      - source: shard_init_script
+        target: /docker-entrypoint-initdb.d/init-url-db.sql
     deploy:
       replicas: 1
-#      placement:
-#        constraints:
-#          - node.role == manager
       restart_policy:
         condition: on-failure
         delay: 10s
         max_attempts: 3
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
     networks:
       - app-net
 
@@ -251,16 +289,20 @@ services:
       MYSQL_PASSWORD: ${SPRING_DATA_PASS}
     volumes:
       - mysql-auth-data:/var/lib/mysql
-      - ./init-auth-db.sql:/docker-entrypoint-initdb.d/init-auth-db.sql
+    configs:
+      - source: auth_init_script
+        target: /docker-entrypoint-initdb.d/init-auth-db.sql
     deploy:
       replicas: 1
-#      placement:
-#        constraints:
-#          - node.role == manager
       restart_policy:
         condition: on-failure
         delay: 10s
         max_attempts: 3
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
     networks:
       - app-net
 
@@ -285,6 +327,11 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
     networks:
       - app-net
 
@@ -309,6 +356,11 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
     networks:
       - app-net
 
@@ -328,6 +380,10 @@ volumes:
 configs:
   nginx_config:
     file: ./nginx/nginx.conf
+  shard_init_script:
+    file: ./init-url-db.sql
+  auth_init_script:
+    file: ./init-auth-db.sql
 
 # ─────────────────────────────────────────────
 # Overlay network
