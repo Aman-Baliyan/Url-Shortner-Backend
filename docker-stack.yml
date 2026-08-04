@@ -1,0 +1,338 @@
+version: "3.9"
+
+services:
+  # nginx service
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+
+  # ─────────────────────────────────────────────
+  # Eureka Discovery Registry
+  # ─────────────────────────────────────────────
+  registry:
+    image: baliyan766/eureka:latest
+    ports:
+      - target: 8761
+        published: 8761
+        protocol: tcp
+        mode: ingress
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+    networks:
+      - app-net
+
+  # ─────────────────────────────────────────────
+  # API Gateway Service with Redis Rate Limiting
+  # ─────────────────────────────────────────────
+  gateway:
+    image: baliyan766/gateway:latest
+    ports:
+      - target: 8080
+        published: 8080
+        protocol: tcp
+        mode: ingress
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: ${EUREKA_SERVER}
+      SPRING_REDIS_URL_HOST: ${REDIS_COUNTER_HOST}
+      SPRING_REDIS_URL_PORT: ${REDIS_COUNTER_PORT}
+      SPRING_REDIS_URL_PASSWORD: ${REDIS_COUNTER_PASSWORD}
+      ALLOW_ORIGINS: ${ALLOW_ORIGIN}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+    networks:
+      - app-net
+
+  # ─────────────────────────────────────────────
+  # Authentication Service
+  # ─────────────────────────────────────────────
+  auth-service:
+    image: baliyan766/auth-service:latest
+    ports:
+      - target: 8082
+        published: 8082
+        protocol: tcp
+        mode: ingress
+    environment:
+      SPRING_DATA_URL: ${SPRING_DATA_URL}
+      SPRING_DATA_USER: ${SPRING_DATA_USER}
+      SPRING_DATA_PASS: ${SPRING_DATA_PASS}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: ${EUREKA_SERVER}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+    networks:
+      - app-net
+
+  # ─────────────────────────────────────────────
+  # URL Service — Instance 1
+  # ─────────────────────────────────────────────
+  app1:
+    image: baliyan766/url-service:latest
+    ports:
+      - target: 8083
+        published: 8083
+        protocol: tcp
+        mode: ingress
+    environment:
+      SPRING_DATA_URL_ONE: ${SPRING_DATA_URL_ONE}
+      SPRING_DATA_USER_ONE: ${SPRING_DATA_USER_ONE}
+      SPRING_DATA_PASS_ONE: ${SPRING_DATA_PASS_ONE}
+      SPRING_DATA_URL_TWO: ${SPRING_DATA_URL_TWO}
+      SPRING_DATA_USER_TWO: ${SPRING_DATA_USER_TWO}
+      SPRING_DATA_PASS_TWO: ${SPRING_DATA_PASS_TWO}
+      SPRING_REDIS_URL_HOST: ${REDIS_URL_HOST}
+      SPRING_REDIS_URL_PORT: ${REDIS_URL_PORT}
+      SPRING_REDIS_URL_PASSWORD: ${REDIS_URL_PASSWORD}
+      SPRING_REDIS_COUNTER_HOST: ${REDIS_COUNTER_HOST}
+      SPRING_REDIS_COUNTER_PORT: ${REDIS_COUNTER_PORT}
+      SPRING_REDIS_COUNTER_PASSWORD: ${REDIS_COUNTER_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: ${EUREKA_SERVER}
+      WORKER_ID: ${WORKER_ID_ONE}
+      ORIGIN_VALUE: ${SUB_DOMAIN}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+    networks:
+      - app-net
+
+  # ─────────────────────────────────────────────
+  # URL Service — Instance 2
+  # ─────────────────────────────────────────────
+  app2:
+    image: baliyan766/url-service:latest
+    ports:
+      - target: 8084
+        published: 8084
+        protocol: tcp
+        mode: ingress
+    environment:
+      SPRING_DATA_URL_ONE: ${SPRING_DATA_URL_ONE}
+      SPRING_DATA_USER_ONE: ${SPRING_DATA_USER_ONE}
+      SPRING_DATA_PASS_ONE: ${SPRING_DATA_PASS_ONE}
+      SPRING_DATA_URL_TWO: ${SPRING_DATA_URL_TWO}
+      SPRING_DATA_USER_TWO: ${SPRING_DATA_USER_TWO}
+      SPRING_DATA_PASS_TWO: ${SPRING_DATA_PASS_TWO}
+      SPRING_REDIS_URL_HOST: ${REDIS_URL_HOST}
+      SPRING_REDIS_URL_PORT: ${REDIS_URL_PORT}
+      SPRING_REDIS_URL_PASSWORD: ${REDIS_URL_PASSWORD}
+      SPRING_REDIS_COUNTER_HOST: ${REDIS_COUNTER_HOST}
+      SPRING_REDIS_COUNTER_PORT: ${REDIS_COUNTER_PORT}
+      SPRING_REDIS_COUNTER_PASSWORD: ${REDIS_COUNTER_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: ${EUREKA_SERVER}
+      WORKER_ID: ${WORKER_ID_TWO}
+      ORIGIN_VALUE: ${SUB_DOMAIN}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+    networks:
+      - app-net
+
+  # ─────────────────────────────────────────────
+  # MySQL — Shard 1
+  # ─────────────────────────────────────────────
+  mysql-shard-1:
+    image: mysql:8.0
+    ports:
+      - target: 3306
+        published: 3307
+        protocol: tcp
+        mode: ingress
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE_1}
+      MYSQL_USER: ${SPRING_DATA_USER_ONE}
+      MYSQL_PASSWORD: ${SPRING_DATA_PASS_ONE}
+    volumes:
+      - mysql-shard-1-data:/var/lib/mysql
+      - ./init-url-db.sql:/docker-entrypoint-initdb.d/init-url-db.sql
+    deploy:
+      replicas: 1
+#      placement:
+#        constraints:
+#          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+    networks:
+      - app-net
+
+  # ─────────────────────────────────────────────
+  # MySQL — Shard 2
+  # ─────────────────────────────────────────────
+  mysql-shard-2:
+    image: mysql:8.0
+    ports:
+      - target: 3306
+        published: 3308
+        protocol: tcp
+        mode: ingress
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE_2}
+      MYSQL_USER: ${SPRING_DATA_USER_TWO}
+      MYSQL_PASSWORD: ${SPRING_DATA_PASS_TWO}
+    volumes:
+      - mysql-shard-2-data:/var/lib/mysql
+      - ./init-url-db.sql:/docker-entrypoint-initdb.d/init-url-db.sql
+    deploy:
+      replicas: 1
+#      placement:
+#        constraints:
+#          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+    networks:
+      - app-net
+
+  # ─────────────────────────────────────────────
+  # MySQL — Auth DB
+  # ─────────────────────────────────────────────
+  mysql-auth:
+    image: mysql:8.0
+    ports:
+      - target: 3306
+        published: 3309
+        protocol: tcp
+        mode: ingress
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_AUTH_DATABASE}
+      MYSQL_USER: ${SPRING_DATA_USER}
+      MYSQL_PASSWORD: ${SPRING_DATA_PASS}
+    volumes:
+      - mysql-auth-data:/var/lib/mysql
+      - ./init-auth-db.sql:/docker-entrypoint-initdb.d/init-auth-db.sql
+    deploy:
+      replicas: 1
+#      placement:
+#        constraints:
+#          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+    networks:
+      - app-net
+
+  # ─────────────────────────────────────────────
+  # Redis — URL Cache
+  # ─────────────────────────────────────────────
+  redis-url:
+    image: redis:7-alpine
+    ports:
+      - target: 6379
+        published: 6379
+        protocol: tcp
+        mode: ingress
+    environment:
+      REDISCLI_AUTH: ${REDIS_URL_PASSWORD}
+    volumes:
+      - redis-url-data:/data
+    # command: redis-server --requirepass ${REDIS_URL_PASSWORD} --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    networks:
+      - app-net
+
+  # ─────────────────────────────────────────────
+  # Redis — Counter / Rate Limiter
+  # ─────────────────────────────────────────────
+  redis-counter:
+    image: redis:7-alpine
+    ports:
+      - target: 6379
+        published: 6380
+        protocol: tcp
+        mode: ingress
+    environment:
+      REDISCLI_AUTH: ${REDIS_COUNTER_PASSWORD}
+    volumes:
+      - redis-counter-data:/data
+    # command: redis-server --requirepass ${REDIS_COUNTER_PASSWORD} --appendonly yes
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    networks:
+      - app-net
+
+# ─────────────────────────────────────────────
+# Named volumes
+# ─────────────────────────────────────────────
+volumes:
+  mysql-shard-1-data:
+  mysql-shard-2-data:
+  mysql-auth-data:
+  redis-url-data:
+  redis-counter-data:
+
+# ─────────────────────────────────────────────
+# Configs
+# ─────────────────────────────────────────────
+configs:
+  nginx_config:
+    file: ./nginx/nginx.conf
+
+# ─────────────────────────────────────────────
+# Overlay network
+# ─────────────────────────────────────────────
+networks:
+  app-net:
+    driver: overlay
+    attachable: true

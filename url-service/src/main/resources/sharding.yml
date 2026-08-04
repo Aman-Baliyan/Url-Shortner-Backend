@@ -1,0 +1,57 @@
+dataSources:
+  ds0:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    driverClassName: com.mysql.cj.jdbc.Driver
+    jdbcUrl: jdbc:mysql://mysql-shard-1:3306/ds0?useSSL=false&allowPublicKeyRetrieval=true
+    username: aman
+    password: aman
+    maxPoolSize: 10
+  ds1:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    driverClassName: com.mysql.cj.jdbc.Driver
+    jdbcUrl: jdbc:mysql://mysql-shard-2:3306/ds1?useSSL=false&allowPublicKeyRetrieval=true
+    username: aman
+    password: aman
+    maxPoolSize: 10
+rules:
+  - !SHARDING
+    tables:
+      url_mapping:
+        actualDataNodes: ds$->{0..1}.url_mapping
+        databaseStrategy:
+          standard:
+            shardingColumn: long_key
+            shardingAlgorithmName: long-url-hash-inline
+        keyGenerateStrategy:
+          column: id
+          keyGeneratorName: snowflake
+
+      short_key_data:
+        actualDataNodes: ds$->{0..1}.short_key_data
+        databaseStrategy:
+          standard:
+            shardingColumn: short_key
+            shardingAlgorithmName: short-key-hash-inline
+        keyGenerateStrategy:
+          column: id
+          keyGeneratorName: snowflake
+
+    shardingAlgorithms:
+      long-url-hash-inline:
+        type: INLINE
+        props:
+          algorithm-expression:  ds$->{Math.abs(long_key.hashCode()) % 2}
+
+      short-key-hash-inline:
+        type: INLINE
+        props:
+          algorithm-expression:  ds$->{Math.abs(short_key.hashCode()) % 2}
+
+    keyGenerators:
+      snowflake:
+        type: SNOWFLAKE
+        props:
+          worker-id: 1
+
+props:
+  sql-show: false

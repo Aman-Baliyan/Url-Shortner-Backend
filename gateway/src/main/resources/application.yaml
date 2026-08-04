@@ -1,11 +1,14 @@
 server:
   port: 8080
 
+jwt:
+  secret-key: .dmdjgroet7478#$%^&*risrweriu;we84334
+
 eureka:
   client:
     serviceUrl:
-#      defaultZone: ${EUREKA_SERVER:http://localhost:8761/eureka}
-      defaultZone: http://localhost:8761/eureka
+      defaultZone: ${EUREKA_SERVER:http://localhost:8761/eureka}
+#      defaultZone: http://localhost:8761/eureka
 
 spring:
   application:
@@ -14,9 +17,9 @@ spring:
   # Connect to Reactive Redis instance
   data:
     redis:
-      host: localhost
-      port: 16379
-      password: mypass
+      host: ${SPRING_REDIS_URL_HOST}
+      port: ${SPRING_REDIS_URL_PORT}
+      password: ${SPRING_REDIS_URL_PASSWORD}
 
   cloud:
     gateway:
@@ -27,8 +30,24 @@ spring:
               enabled: true
               lower-case-service-id: true
 
+          globalcors:
+            corsConfigurations:
+              '[/**]':
+                allowedOrigins: ${ALLOW_ORIGIN}
+                allowedMethods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                  - OPTIONS
+                allowedHeaders: "*"
+
           routes:
-            # ROUTE 1: URL Generation (Rate Limited)
+            - id: auth-service
+              uri: lb://AUTH-SERVICE
+              predicates:
+                - Path=/auth/**
+
             - id: url-service-generate
               uri: lb://URL-SERVICE
               predicates:
@@ -38,8 +57,8 @@ spring:
                   args:
                     rate-limiter: "#{@redisRateLimiter}"
                     key-resolver: "#{@simpleClientAddressResolver}"
+                - name: TokenRelayHeaderFilter
 
-            # ROUTE 2: Redirection (No Rate Limiting applied)
             - id: url-service-redirect
               uri: lb://URL-SERVICE
               predicates:
@@ -49,3 +68,16 @@ spring:
                   args:
                     rate-limiter: "#{@redisRateLimiter}"
                     key-resolver: "#{@simpleClientAddressResolver}"
+
+            - id: csv-data
+              uri: lb://URL-SERVICE
+              predicates:
+                - Path=/upload/csv
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@redisRateLimiter}"
+                    key-resolver: "#{@simpleClientAddressResolver}"
+
+allow:
+  origins: ${ALLOW_ORIGIN}

@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: url-service
+
+  datasource:
+    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
+    url: jdbc:shardingsphere:classpath:sharding.yml?placeholder-type=environment
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  redis:
+    url:
+      host: ${REDIS_URL_HOST}
+      port: ${REDIS_URL_PORT}
+      password: ${REDIS_URL_PASSWORD}
+    counter:
+      host: ${REDIS_COUNTER_HOST}
+      port: ${REDIS_COUNTER_PORT}
+      password: ${REDIS_COUNTER_PASSWORD}
+
+server:
+  port: 0
+
+origin:
+  value: ${ORIGIN_VAL}
+
+eureka:
+  instance:
+    prefer-ip-address: true
+  client:
+    serviceUrl:
+      defaultZone: ${EUREKA_SERVER}

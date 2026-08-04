@@ -1,6 +1,6 @@
-# Docker Compose file for Spring Boot + MySQL + Redis stack
+# Docker Compose file for Spring Boot + MySQL (Sharded + Auth) + Redis stack
 services:
-  # Spring Boot application service
+  # Eureka Discovery Registry
   registry:
     build:
       context: ./eureka
@@ -9,6 +9,7 @@ services:
       - "8761:8761"
     restart: unless-stopped
 
+  # API Gateway Service with Redis Rate Limiting
   gateway:
     build:
       context: ./gateway
@@ -17,19 +18,50 @@ services:
       - "8080:8080"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: ${EUREKA_SERVER}
+      SPRING_REDIS_URL_HOST: ${REDIS_COUNTER_HOST}
+      SPRING_REDIS_URL_PORT: ${REDIS_COUNTER_PORT}
+      SPRING_REDIS_URL_PASSWORD: ${REDIS_COUNTER_PASSWORD}
+      ALLOW_ORIGINS: ${ALLOW_ORIGIN}
     depends_on:
       registry:
         condition: service_started
+      redis-counter:
+        condition: service_healthy
     restart: unless-stopped
 
-  app:
+  # Authentication Service
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATA_URL: ${SPRING_DATA_URL}
+      SPRING_DATA_USER: ${SPRING_DATA_USER}
+      SPRING_DATA_PASS: ${SPRING_DATA_PASS}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: ${EUREKA_SERVER}
+    depends_on:
+      registry:
+        condition: service_started
+      mysql-auth:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # URL Service (Instance 1)
+  app1:
     build:
       context: ./url-service
       dockerfile: Dockerfile
+    ports:
+      - "8083:8083"
     environment:
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_DATA_URL_ONE: ${SPRING_DATA_URL_ONE}
+      SPRING_DATA_USER_ONE: ${SPRING_DATA_USER_ONE}
+      SPRING_DATA_PASS_ONE: ${SPRING_DATA_PASS_ONE}
+      SPRING_DATA_URL_TWO: ${SPRING_DATA_URL_TWO}
+      SPRING_DATA_USER_TWO: ${SPRING_DATA_USER_TWO}
+      SPRING_DATA_PASS_TWO: ${SPRING_DATA_PASS_TWO}
       SPRING_REDIS_URL_HOST: ${REDIS_URL_HOST}
       SPRING_REDIS_URL_PORT: ${REDIS_URL_PORT}
       SPRING_REDIS_URL_PASSWORD: ${REDIS_URL_PASSWORD}
@@ -37,12 +69,17 @@ services:
       SPRING_REDIS_COUNTER_PORT: ${REDIS_COUNTER_PORT}
       SPRING_REDIS_COUNTER_PASSWORD: ${REDIS_COUNTER_PASSWORD}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: ${EUREKA_SERVER}
+      WORKER_ID: ${WORKER_ID_ONE}
+      ORIGIN_VALUE: ${SUB_DOMAIN}
+
     depends_on:
       registry:
         condition: service_started
       gateway:
         condition: service_started
-      mysql:
+      mysql-shard-1:
+        condition: service_healthy
+      mysql-shard-2:
         condition: service_healthy
       redis-url:
         condition: service_healthy
@@ -50,25 +87,100 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # MySQL database service
-  mysql:
+ # URL Service (Instance 2)
+  app2:
+    build:
+      context: ./url-service
+      dockerfile: Dockerfile
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_DATA_URL_ONE: ${SPRING_DATA_URL_ONE}
+      SPRING_DATA_USER_ONE: ${SPRING_DATA_USER_ONE}
+      SPRING_DATA_PASS_ONE: ${SPRING_DATA_PASS_ONE}
+      SPRING_DATA_URL_TWO: ${SPRING_DATA_URL_TWO}
+      SPRING_DATA_USER_TWO: ${SPRING_DATA_USER_TWO}
+      SPRING_DATA_PASS_TWO: ${SPRING_DATA_PASS_TWO}
+      SPRING_REDIS_URL_HOST: ${REDIS_URL_HOST}
+      SPRING_REDIS_URL_PORT: ${REDIS_URL_PORT}
+      SPRING_REDIS_URL_PASSWORD: ${REDIS_URL_PASSWORD}
+      SPRING_REDIS_COUNTER_HOST: ${REDIS_COUNTER_HOST}
+      SPRING_REDIS_COUNTER_PORT: ${REDIS_COUNTER_PORT}
+      SPRING_REDIS_COUNTER_PASSWORD: ${REDIS_COUNTER_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: ${EUREKA_SERVER}
+      WORKER_ID: ${WORKER_ID_TWO}
+      ORIGIN_VALUE: ${SUB_DOMAIN}
+    depends_on:
+      registry:
+        condition: service_started
+      gateway:
+        condition: service_started
+      mysql-shard-1:
+        condition: service_healthy
+      mysql-shard-2:
+        condition: service_healthy
+      redis-url:
+        condition: service_healthy
+      redis-counter:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # MySQL Database Instance - Shard 1
+  mysql-shard-1:
     image: mysql:8.0
     ports:
       - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${SPRING_DATASOURCE_USERNAME}
-      MYSQL_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
-#    volumes:
-#      - mysql-data:/var/lib/mysql
+      MYSQL_DATABASE: ${MYSQL_DATABASE_1}
+      MYSQL_USER: ${SPRING_DATA_USER_ONE}
+      MYSQL_PASSWORD: ${SPRING_DATA_PASS_ONE}
+    volumes:
+      - mysql-shard-1-data:/var/lib/mysql
+      - ./init-url-db.sql:/docker-entrypoint-initdb.d/init-url-db.sql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
-#    networks:
-#      - app-network
+
+  # MySQL Database Instance - Shard 2
+  mysql-shard-2:
+    image: mysql:8.0
+    ports:
+      - "3308:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE_2}
+      MYSQL_USER: ${SPRING_DATA_USER_TWO}
+      MYSQL_PASSWORD: ${SPRING_DATA_PASS_TWO}
+    volumes:
+      - mysql-shard-2-data:/var/lib/mysql
+      - ./init-url-db.sql:/docker-entrypoint-initdb.d/init-url-db.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MySQL Database Instance - Auth Service
+  mysql-auth:
+    image: mysql:8.0
+    ports:
+      - "3309:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_AUTH_DATABASE}
+      MYSQL_USER: ${SPRING_DATA_USER}
+      MYSQL_PASSWORD: ${SPRING_DATA_PASS}
+    volumes:
+      - mysql-auth-data:/var/lib/mysql
+      - ./init-auth-db.sql:/docker-entrypoint-initdb.d/init-auth-db.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Redis caching service for URLs
   redis-url:
@@ -77,41 +189,35 @@ services:
       - "6379:6379"
     environment:
       REDISCLI_AUTH: ${REDIS_URL_PASSWORD}
-    # volumes:
-    #   - redis-url-data:/data
+    volumes:
+      - redis-url-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     command: redis-server --requirepass ${REDIS_URL_PASSWORD} --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-#    networks:
-#      - app-network
 
-  # Redis caching service for counters
+  # Redis service for counter generator & API Gateway Rate Limiting
   redis-counter:
     image: redis:7-alpine
     ports:
       - "6380:6379"
     environment:
       REDISCLI_AUTH: ${REDIS_COUNTER_PASSWORD}
-    # volumes:
-    #   - redis-counter-data:/data
+    volumes:
+      - redis-counter-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     command: redis-server --requirepass ${REDIS_COUNTER_PASSWORD} --appendonly yes
-#    networks:
-#      - app-network
 
-## Persistent volumes for data
-#volumes:
-#  mysql-data:
-#  redis-data:
-#
-## Shared network for inter-service communication
-#networks:
-#  app-network:
-#    driver: bridge
+# Persistent volumes for datastores
+volumes:
+  mysql-shard-1-data:
+  mysql-shard-2-data:
+  mysql-auth-data:
+  redis-url-data:
+  redis-counter-data:

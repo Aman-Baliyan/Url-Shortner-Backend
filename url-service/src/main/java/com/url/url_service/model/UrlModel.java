@@ -1,18 +1,29 @@
 package com.url.url_service.model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 
-@Entity(name = "UrlTable")
+@Entity(name = "short_key_data")
 public class UrlModel {
 
     public UrlModel() {
     }
 
+    public long getId() {
+        return id;
+    }
+
+    public void setId(long id) {
+        this.id = id;
+    }
+
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    long id;
+
+    @Column(name = "short_key")
     private String shortKey;
 
     public String getShortKey() {
@@ -31,13 +42,7 @@ public class UrlModel {
         this.longKey = longKey;
     }
 
-    public String getPassword() {
-        return password;
-    }
 
-    public void setPassword(String password) {
-        this.password = password;
-    }
 
     public boolean isOneTime() {
         return oneTime;
@@ -59,21 +64,17 @@ public class UrlModel {
         return createdAt;
     }
 
-    public UrlModel(String shortKey, String longKey, String password, boolean oneTime, boolean isTimeSet, LocalDateTime expireAt) {
+    public UrlModel(String shortKey, String longKey, boolean oneTime,LocalDateTime expireAt) {
         this.shortKey = shortKey;
         this.longKey = longKey;
-        this.password = password;
         this.oneTime = oneTime;
-        this.isTimeSet = isTimeSet;
         this.expireAt = expireAt;
     }
 
-    public UrlModel(String shortKey, String longKey, String password, boolean oneTime, boolean isTimeSet, LocalDateTime expireAt, LocalDateTime createdAt) {
+    public UrlModel(String shortKey, String longKey, boolean oneTime, LocalDateTime expireAt, LocalDateTime createdAt) {
         this.shortKey = shortKey;
         this.longKey = longKey;
-        this.password = password;
         this.oneTime = oneTime;
-        this.isTimeSet = isTimeSet;
         this.expireAt = expireAt;
         this.createdAt = createdAt;
     }
@@ -82,23 +83,11 @@ public class UrlModel {
         this.createdAt = createdAt;
     }
 
-    public boolean isTimeSet() {
-        return isTimeSet;
-    }
 
-    public void setTimeSet(boolean timeSet) {
-        isTimeSet = timeSet;
-    }
 
     private String longKey;
 
-    private String password;
-
     private boolean oneTime;
-
-
-
-    private boolean isTimeSet;
 
     private LocalDateTime expireAt;
 
